@@ -142,25 +142,13 @@ def page_data_plot():
     st.pyplot(fig)
 
 
-# Page 4: Deep-Dive Analysis
-def page_analysis():
-    st.title("Page 4: Deep-Dive Analysis")
-    st.write(
-        "This is a placeholder page for future exploratory data analysis"
-    )
-    st.json({
-        "Total Rows": 14877,
-        "Regions Included": ["NO", "EL1", "EL2", "EL3", "EL4", "EL5"],
-        "Status": "Data Cleaned and Normalized",
-    })
-
 
 # Navigation Setup
 pg = st.navigation([
     st.Page(page_home, title="Home"),
     st.Page(page_data_table, title="Data Table"),
     st.Page(page_data_plot, title="Data Plot"),
-    st.Page(page_analysis, title="Analysis"),
+    
 ])
 
 pg.run()
