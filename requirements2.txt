@@ -3,3 +3,4 @@ pandas
 matplotlib.pyplot
 requests
 pymongo
+seaborn 
