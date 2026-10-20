@@ -1,0 +1,15 @@
+
+.env
+*.env
+dotenv.env
+.streamlit/secrets.toml
+**/.streamlit/secrets.toml
+
+.venv/SSS
+venv/
+__pycache__/
+*.pyc
+
+.ipynb_checkpoints/
+
+.vscode/
