@@ -1,6 +1,12 @@
+
 streamlit
 pandas
 matplotlib
 seaborn
 pymongo
 requests
+numpy
+scipy
+scikit-learn
+statsmodels
+
