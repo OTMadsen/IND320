@@ -49,27 +49,48 @@ def download_era5_by_coordinate(region, latitude, longitude,
     return frame
 
 
-def read_locations(uploaded=None):
-    """Read previously sampled electricity coordinates; never generate new ones."""
-    if uploaded is not None:
-        points = pd.read_csv(uploaded)
-    else:
-        candidates = [
-            Path("assignments/assignment3/electricity_sampled_locations.csv"),
-            Path("electricity_sampled_locations.csv"),
-        ]
-        path = next((p for p in candidates if p.exists()), None)
-        if path is None:
-            return None
-        points = pd.read_csv(path)
+def read_locations():
+
+    project_root = Path(__file__).resolve().parent.parent
+
+
+    csv_path = (
+        project_root
+        / "assignments"
+        / "assignment3"
+        / "electricity_sampled_locations.csv"
+    )
+
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"Could not find sampled locations {csv_path}. Please try again."
+        )
+
+    points = pd.read_csv(csv_path)
 
     required = {"region", "latitude", "longitude"}
+
     if not required.issubset(points.columns):
-        raise ValueError(f"Location CSV must contain: {sorted(required)}")
-    points = points.copy()
+        raise ValueError(
+            f"Missing columns: {required - set(points.columns)}"
+        )
+
     points["region"] = (
-        points["region"].astype(str).str.strip().str.replace(" ", "", regex=False)
+        points["region"]
+        .astype(str)
+        .str.strip()
+        .str.replace(" ", "", regex=False)
+        .str.upper()
+        
     )
-    points["latitude"] = pd.to_numeric(points["latitude"], errors="coerce")
-    points["longitude"] = pd.to_numeric(points["longitude"], errors="coerce")
-    return points.dropna(subset=["latitude", "longitude"])
+
+    points["latitude"] = pd.to_numeric(
+        points["latitude"], errors="coerce"
+    )
+    points["longitude"] = pd.to_numeric(
+        points["longitude"], errors="coerce"
+    )
+
+    return points.dropna(
+        subset=["longitude", "latitude"]
+    )
