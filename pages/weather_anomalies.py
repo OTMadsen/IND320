@@ -16,15 +16,12 @@ def page_weather_anomalies():
     )
 
     with st.expander("Weather data and download controls", expanded=True):
-        point_file = st.file_uploader(
-            "Optional sampled locations CSV (region, latitude, longitude)",
-            type=["csv"], key="location_csv",
-        )
         try:
-            locations = read_locations(point_file)
+            locations = read_locations()
         except Exception as exc:
-            st.error(f"Could not read sampled locations: {exc}")
-            locations = None
+            st.error(f"Could not load sampled locations: {exc}")
+            return
+        st.success("Sampled electricity locations loaded automatically")
 
         region_locations = (
             locations[locations["region"] == region].reset_index(drop=True)
