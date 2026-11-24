@@ -5,6 +5,7 @@ numpy
 matplotlib
 scikit-learn
 scipy
+seaborn
 statsmodels
 geopandas
 pydeck
