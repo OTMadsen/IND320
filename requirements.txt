@@ -1,12 +1,15 @@
 
 streamlit
 pandas
-matplotlib
-seaborn
-pymongo
-requests
 numpy
-scipy
+matplotlib
 scikit-learn
+scipy
 statsmodels
+geopandas
+pydeck
+plotly
+river
+
+
 

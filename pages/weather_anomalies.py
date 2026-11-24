@@ -5,6 +5,59 @@ from ui.filters import get_selected_electricity_area
 from services.weather import read_locations, download_era5_by_coordinate, weather_daily_from_hourly
 from analysis.anomalies import plot_precipitation_spc, plot_temperature_lof
 
+# Hourly ERA5 fields already downloaded by services/weather.py.
+# Aggregation uses the same UTC calendar-day convention as the original page.
+
+WEATHER_PROPERTIES = {
+    "Temperature": ("temperature_2m", "°C", "mean"),
+    "Precipitation": ("precipitation", "mm/day", "sum"),
+    "Rain": ("rain", "mm/day", "sum"),
+    "Snowfall": ("snowfall", "cm/day", "sum"),
+    "Relative humidity": ("relative_humidity_2m", "%", "mean"),
+    "Wind speed": ("wind_speed_10m", "km/h", "mean"),
+}
+
+
+def available_weather_properties(hourly):
+    """Offer only fields present with at least one numeric observation."""
+    return [
+        label for label, (column, _, _) in WEATHER_PROPERTIES.items()
+        if column in hourly.columns
+        and pd.to_numeric(hourly[column], errors="coerce").notna().any()
+    ]
+
+
+def selected_daily_weather(hourly, weather_daily, label):
+    """Produce a daily series for either anomaly algorithm."""
+    column, unit, aggregation = WEATHER_PROPERTIES[label]
+
+    # Reuse the app's existing daily aggregation when possible.
+    if column == "temperature_2m":
+        series = weather_daily["temperature_c"]
+    elif column == "precipitation":
+        series = weather_daily["precipitation_mm"]
+    else:
+        frame = pd.DataFrame({
+            "time": pd.to_datetime(hourly["time"], errors="coerce", utc=True),
+            "value": pd.to_numeric(hourly[column], errors="coerce"),
+        })
+        frame = frame.dropna(subset=["time"]).set_index("time").sort_index()
+        grouped = frame["value"].resample("D")
+        series = (grouped.sum(min_count=1) if aggregation == "sum" else grouped.mean())
+
+    return series.dropna().sort_index(), unit, aggregation
+
+
+def relabel_anomaly_figure(fig, label, unit, aggregation):
+    """Correct the plot labels used by the original fixed-property functions."""
+    ax = fig.axes[0]
+    ax.set_ylabel(f"{label} ({unit})")
+    if ax.lines:
+        descriptor = "daily total" if aggregation == "sum" else "daily mean"
+        ax.lines[0].set_label(f"{label} ({descriptor})")
+        ax.legend()
+    fig.tight_layout()
+
 
 def page_weather_anomalies():
     region = get_selected_electricity_area()
@@ -125,9 +178,25 @@ def page_weather_anomalies():
         "precipitation summed per day; temperature averaged per day."
     )
 
-    tab_spc, tab_lof = st.tabs(["Precipitation · DCT / SPC",
-                                "Temperature · LOF"])
+    properties = available_weather_properties(hourly)
+    if not properties:
+        st.warning("The loaded dataset contains no usable weather properties.")
+        return
+
+    st.caption(
+        "Choose an ERA5 property independently for each analysis. "
+        "Rain, snowfall and precipitation use daily totals; "
+        "temperature, humidity and wind speed use daily means."
+    )
+
+    tab_spc, tab_lof = st.tabs(["DCT / SPC", "LOF"])
     with tab_spc:
+        spc_property = st.selectbox(
+            "Weather property for DCT / SPC",
+            options=properties,
+            index=properties.index("Temperature") if "Temperature" in properties else 0,
+            key="spc_weather_property",
+        )
         cutoff = st.slider(
             "DCT cutoff (cycles/year)", 1, 24, 6,
         )
@@ -135,45 +204,71 @@ def page_weather_anomalies():
             "SPC threshold (robust standard deviations)", 1.0, 6.0, 3.0, 0.5,
         )
         try:
-            fig, summary = plot_precipitation_spc(weather_daily, cutoff, n_std)
+            spc_series, spc_unit, spc_aggregation = selected_daily_weather(
+                hourly, weather_daily, spc_property
+            )
+            # Reuse the original SPC algorithm, which expects this field name.
+            spc_input = pd.DataFrame({"precipitation_mm": spc_series})
+            fig, summary = plot_precipitation_spc(spc_input, cutoff, n_std)
+            relabel_anomaly_figure(fig, spc_property, spc_unit, spc_aggregation)
             st.pyplot(fig)
             plt.close(fig)
             a, b, c = st.columns(3)
             a.metric("Days", summary["total_observations"])
             b.metric("SPC outliers", summary["outlier_count"])
             c.metric("Outlier share", f"{summary['outlier_percentage']:.2f}%")
-            st.dataframe(summary["outliers"], use_container_width=True)
+            spc_outliers = summary["outliers"].rename(
+                columns={"precipitation_mm": f"{spc_property} ({spc_unit})"}
+            )
+            st.dataframe(spc_outliers, use_container_width=True)
             st.caption(
-                "SPC limits are calculated from robust statistics on DCT "
-                "residuals, but displayed against original precipitation."
+                f"DCT/SPC analyses daily {spc_property.lower()}. "
+                "Robust limits are estimated from DCT residuals and "
+                "displayed against the observed values."
             )
         except Exception as exc:
             st.error(f"SPC analysis failed: {exc}")
 
     with tab_lof:
+        lof_property = st.selectbox(
+            "Weather property for LOF",
+            options=properties,
+            index=properties.index("Temperature") if "Temperature" in properties else 0,
+            key="lof_weather_property",
+        )
+        lof_series, lof_unit, lof_aggregation = selected_daily_weather(
+            hourly, weather_daily, lof_property
+        )
         contamination = st.slider(
             "Expected anomaly proportion (%)",
             min_value=0.5, max_value=10.0, value=1.0, step=0.5,
         ) / 100.0
         n_neighbors = st.slider(
             "Number of LOF neighbours", min_value=2,
-            max_value=min(100, max(2, len(weather_daily) - 1)),
-            value=min(20, max(2, len(weather_daily) - 1)),
+            max_value=min(100, max(2, len(lof_series) - 1)),
+            value=min(20, max(2, len(lof_series) - 1)),
         )
         try:
+            # Reuse the existing LOF algorithm (value and day-to-day change).
+            lof_input = pd.DataFrame({"temperature_c": lof_series})
             fig, summary = plot_temperature_lof(
-                weather_daily, contamination, n_neighbors
+                lof_input, contamination, n_neighbors
             )
+            relabel_anomaly_figure(fig, lof_property, lof_unit, lof_aggregation)
             st.pyplot(fig)
             plt.close(fig)
             a, b, c = st.columns(3)
             a.metric("Days", summary["total_observations"])
             b.metric("LOF anomalies", summary["outlier_count"])
             c.metric("Anomaly share", f"{summary['outlier_percentage']:.2f}%")
-            st.dataframe(summary["outliers"], use_container_width=True)
+            lof_outliers = summary["outliers"].rename(
+                columns={"temperature_c": f"{lof_property} ({lof_unit})"}
+            )
+            st.dataframe(lof_outliers, use_container_width=True)
             st.caption(
-                "LOF uses daily mean temperature and day-to-day changes. "
-                "Detected anomalies need not be measurement errors."
+                f"LOF uses daily {lof_property.lower()} values and "
+                "their day-to-day changes. Detected anomalies need not "
+                "be measurement errors."
             )
         except Exception as exc:
             st.error(f"LOF analysis failed: {exc}")
