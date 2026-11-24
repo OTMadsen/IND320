@@ -10,6 +10,7 @@ geopandas
 pydeck
 plotly
 river
+pymongo 
 
 
 
