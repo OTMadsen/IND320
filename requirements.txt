@@ -1,4 +1,3 @@
-
 streamlit
 pandas
 numpy
@@ -11,7 +10,4 @@ geopandas
 pydeck
 plotly
 river
-pymongo 
-
-
-
+pymongo

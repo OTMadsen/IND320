@@ -146,6 +146,9 @@ def _calendar_features(date):
     return {"week_sin": math.sin(angle), "week_cos": math.cos(angle)}
 
 
+
+@st.cache_data(show_spinner=False, max_entries=24)
+
 def _forecast_model(train, horizon, p, d, q, m, sp, sd, sq,
                     selected_features, scenario="Hold last observed value"):
     """Train online on ordered historical weeks and make a genuine future forecast."""
@@ -404,10 +407,18 @@ def page_river_forecasting():
     # Ensure user sees the correct last observation date and avoids false date labels.
     st.caption(f"Training: {training.index[0]:%Y-%m-%d} to "
                f"{training.index[-1]:%Y-%m-%d} ({len(training)} weekly observations).")
+
     try:
-        predictions = _forecast_model(
-            training, horizon, p, d, q, m, sp, sd, sq, selected_features, scenario
-        )
+        with st.spinner(
+            "Training River SNARIMAX and generating forecast...",
+            show_time=True
+        ):
+            predictions = _forecast_model(
+                training, horizon, p, d, q, m, sp, sd, sq,
+                selected_features, scenario
+            )
+
+            
     except ImportError:
         st.error("The River package is not installed. Add 'river' to requirements.txt "
                  "and run `python -m pip install river` locally.")

@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 from scipy.fft import dct, idct
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import RobustScaler
@@ -31,17 +31,36 @@ def plot_precipitation_spc(weather, cutoff_cycles_per_year=6, n_std=3):
     upper = baseline + median + n_std * robust_sigma
     mask = (values < lower) | (values > upper)
 
-    fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(series.index, values, label="Daily precipitation", color="darkblue")
-    ax.plot(series.index, upper, "--", color="orange", label="Upper SPC limit")
-    ax.plot(series.index, lower, "--", color="purple", label="Lower SPC limit")
-    ax.scatter(series.index[mask], values[mask], color="red",
-               s=32, zorder=5, label="Outliers")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Daily precipitation (mm)")
-    ax.grid(alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
+    # Interactive Plotly chart; the DCT/SPC calculations above are unchanged.
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=series.index, y=values, mode="lines",
+        name="Daily precipitation",
+        line=dict(color="#3978BE", width=2),
+    ))
+    fig.add_trace(go.Scatter(
+        x=series.index, y=upper, mode="lines",
+        name="Upper SPC limit",
+        line=dict(color="#F0A32F", dash="dash"),
+    ))
+    fig.add_trace(go.Scatter(
+        x=series.index, y=lower, mode="lines",
+        name="Lower SPC limit",
+        line=dict(color="#9966CC", dash="dash"),
+    ))
+    fig.add_trace(go.Scatter(
+        x=series.index[mask], y=values[mask], mode="markers",
+        name="SPC outliers",
+        marker=dict(color="#E35D60", size=9),
+    ))
+    fig.update_layout(
+        title="Daily precipitation — DCT and SPC anomaly detection",
+        xaxis_title="Date",
+        yaxis_title="Daily precipitation (mm)",
+        hovermode="x unified", height=480,
+        legend=dict(orientation="h", y=1.12),
+        margin=dict(l=20, r=20, t=90, b=40),
+    )
 
     outliers = pd.DataFrame(
         {"precipitation_mm": values[mask],
@@ -77,16 +96,26 @@ def plot_temperature_lof(weather, contamination=0.01, n_neighbors=20):
     labels = lof.fit_predict(scaled)
     mask = labels == -1
 
-    fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(series.index, series, color="steelblue",
-            label="Daily mean temperature")
-    ax.scatter(series.index[mask], series.values[mask],
-               color="red", s=45, zorder=5, label="LOF anomalies")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Temperature (°C)")
-    ax.grid(alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
+    # Interactive Plotly chart; the LOF calculations above are unchanged.
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=series.index, y=series.to_numpy(), mode="lines",
+        name="Daily mean temperature",
+        line=dict(color="#3978BE", width=2),
+    ))
+    fig.add_trace(go.Scatter(
+        x=series.index[mask], y=series.to_numpy()[mask], mode="markers",
+        name="LOF anomalies",
+        marker=dict(color="#E35D60", size=10),
+    ))
+    fig.update_layout(
+        title="Daily mean temperature — LOF anomaly detection",
+        xaxis_title="Date",
+        yaxis_title="Daily mean temperature (°C)",
+        hovermode="x unified", height=480,
+        legend=dict(orientation="h", y=1.12),
+        margin=dict(l=20, r=20, t=90, b=40),
+    )
 
     outliers = pd.DataFrame(
         {"temperature_c": series.values[mask],

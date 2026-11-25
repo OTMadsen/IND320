@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import streamlit as st
 from ui.filters import get_selected_electricity_area
 from services.data import get_reservoir_series
@@ -26,9 +25,9 @@ def page_reservoir_analysis():
         trend = st.slider("Trend smoother (odd)", 53, 261, 105, 2)
         robust = st.checkbox("Robust STL", value=True)
         try:
-            fig = plot_reservoir_stl(series, seasonal, trend, robust)
-            st.pyplot(fig)
-            plt.close(fig)
+            with st.spinner("Calculating STL decomposition...", show_time=True):
+                fig = plot_reservoir_stl(series, seasonal, trend, robust)
+            st.plotly_chart(fig, use_container_width=True, theme="streamlit")
         except Exception as exc:
             st.error(f"STL calculation failed: {exc}")
 
@@ -45,8 +44,8 @@ def page_reservoir_analysis():
             max_value=window - 1, value=window // 2,
         )
         try:
-            fig = plot_reservoir_spectrogram(series, window, overlap)
-            st.pyplot(fig)
-            plt.close(fig)
+            with st.spinner("Calculating reservoir spectrogram...", show_time=True):
+                fig = plot_reservoir_spectrogram(series, window, overlap)
+            st.plotly_chart(fig, use_container_width=True, theme="streamlit")
         except Exception as exc:
             st.error(f"Spectrogram calculation failed: {exc}")

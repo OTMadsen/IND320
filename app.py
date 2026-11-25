@@ -13,18 +13,38 @@ from pages.electricity import page_electricity
 
 st.set_page_config(page_title="Hydro Reservoir Dashboard", layout="wide")
 
-pg = st.navigation([
-    st.Page(page_home, title="Home"),
-    st.Page(page_data_table, title="Reservoir Data Table"),
-    st.Page(page_data_plot, title="Reservoir Data Plot"),
-    st.Page(page_reservoir_analysis, title="Reservoir Analysis"),
-    st.Page(page_weather_anomalies, title="Weather Anomalies"),
-    st.Page(page_area_map, title="Interactive Area Map"),
-    st.Page(page_sliding_window_correlation, title="Sliding Window Correlation"),
-    st.Page(page_river_forecasting, title="River Forecasting"),
-    st.Page(page_electricity, title="Electricity Flow"),
-])
+pg = st.navigation({
+    "General Overview" : [
+        st.Page(page_home, title="Home", default=True),
+        st.Page(page_data_table, title="Reservoir Data Table")
+    ],
 
+    "Data Exploration": [
+        st.Page(page_data_plot, title="Reservoir Data Plot"),
+        st.Page(page_area_map, title="Electricity Area Map"),
+        st.Page(page_electricity, title="Electricity Flow"),
+    ],
+
+    "Statistical Analysis": [
+        st.Page(
+            page_reservoir_analysis,
+            title="Reservoir Analysis"
+        ),
+
+        st.Page(
+        page_sliding_window_correlation,
+        title="Sliding Window Correlation"
+    ),
+
+    ],
+
+    "Predicitive Analysis": [
+        st.Page(
+            page_river_forecasting,
+            title="River SNARIMAX Forecasting"
+        ),
+    ],
+}, position="sidebar")
 
 
 AREA_OPTIONS = ["NO1", "NO2", "NO3", "NO4", "NO5"]

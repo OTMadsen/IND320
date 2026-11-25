@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from scipy.signal import spectrogram
 from statsmodels.tsa.seasonal import STL
 
@@ -17,18 +17,47 @@ def plot_reservoir_stl(series, seasonal_smoother=13,
         series, period=52, seasonal=seasonal_smoother,
         trend=trend_smoother, robust=robust
     ).fit()
-    fig, axes = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
-    for ax, name, data in zip(
-        axes,
-        ["Observed reservoir filling", "Trend", "Seasonal", "Residual"],
-        [series, result.trend, result.seasonal, result.resid],
+    # Display the same STL components as four synchronized, interactive plots.
+    labels = ["Observed reservoir filling", "Trend", "Seasonal", "Residual"]
+    components = [series, result.trend, result.seasonal, result.resid]
+    colours = ["#3978BE", "#2B9978", "#F0A32F", "#E35D60"]
+
+    fig = make_subplots(
+        rows=4,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.065,
+        subplot_titles=labels,
+    )
+    for row, (label, data, colour) in enumerate(
+        zip(labels, components, colours), start=1
     ):
-        ax.plot(series.index, np.asarray(data), linewidth=1.0)
-        ax.set_title(name)
-        ax.grid(alpha=0.3)
-    axes[0].set_ylabel("Filling degree")
-    axes[-1].set_xlabel("Date")
-    fig.tight_layout()
+        fig.add_trace(
+            go.Scatter(
+                x=series.index,
+                y=np.asarray(data, dtype=float),
+                mode="lines",
+                name=label,
+                line=dict(color=colour, width=1.7),
+                hovertemplate="%{x|%Y-%m-%d}<br>Value: %{y:.4f}<extra></extra>",
+            ),
+            row=row,
+            col=1,
+        )
+        fig.update_yaxes(
+            title_text="Filling degree" if row <= 2 else "Deviation",
+            row=row,
+            col=1,
+        )
+
+    fig.update_xaxes(title_text="Date", row=4, col=1)
+    fig.update_layout(
+        title="Reservoir filling — STL decomposition",
+        height=900,
+        showlegend=False,
+        hovermode="x unified",
+        margin=dict(l=30, r=20, t=90, b=45),
+    )
     return fig
 
 
@@ -53,22 +82,40 @@ def plot_reservoir_spectrogram(series, window_length=104,
         detrend="linear", scaling="spectrum"
     )
     dates = series.index[0] + pd.to_timedelta(times * 7, unit="D")
-    date_numbers = mdates.date2num(dates.to_pydatetime())
     power_db = 10 * np.log10(np.maximum(power, 1e-12))
 
-    fig, ax = plt.subplots(figsize=(12, 6))
-    mesh = ax.pcolormesh(
-        date_numbers, frequencies * 52.18, power_db,
-        shading="auto", cmap="viridis"
+    # Interactive heatmap: same spectrogram power values as the former Matplotlib plot.
+    fig = go.Figure(
+        data=[
+            go.Heatmap(
+                x=dates,
+                y=frequencies * 52.18,
+                z=power_db,
+                colorscale="Viridis",
+                colorbar=dict(title="Power (dB)"),
+                hovertemplate=(
+                    "Date: %{x|%Y-%m-%d}<br>"
+                    "Frequency: %{y:.2f} cycles/year<br>"
+                    "Power: %{z:.1f} dB<extra></extra>"
+                ),
+            )
+        ]
     )
-    fig.colorbar(mesh, ax=ax, label="Spectral power (dB)")
-    ax.axhline(1.0, color="white", linestyle="--", label="Annual cycle")
-    ax.set_ylim(0, 6)
-    ax.xaxis_date()
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Frequency (cycles/year)")
-    ax.legend()
-    fig.autofmt_xdate()
-    fig.tight_layout()
+    fig.add_hline(
+        y=1.0,
+        line_color="white",
+        line_dash="dash",
+        line_width=2,
+        annotation_text="Annual cycle (1/year)",
+        annotation_position="top right",
+        annotation_font_color="white",
+    )
+    fig.update_layout(
+        title="Reservoir filling — spectrogram",
+        xaxis_title="Date",
+        yaxis_title="Frequency (cycles/year)",
+        height=560,
+        margin=dict(l=30, r=20, t=70, b=50),
+    )
+    fig.update_yaxes(range=[0, 6])
     return fig

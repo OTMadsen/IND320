@@ -37,7 +37,7 @@ def available_properties(hourly):
         and pd.to_numeric(hourly[column], errors="coerce").notna().any()
     ]
 
-
+@st.cache_data(show_spinner=False, max_entries=12)
 def weekly_weather_series(hourly, property_name):
     """Aggregate hourly observations to the same Sunday-ending weeks as NVE.
 
@@ -65,7 +65,7 @@ def weekly_weather_series(hourly, property_name):
     weekly.name = "weather"
     return weekly
 
-
+st.cache_data(show_spinner=False, max_entries=12)
 def aligned_weekly_data(reservoir, weather, lag_weeks, window_weeks):
     """Align weeks and calculate Pearson r on *consecutive calendar weeks*.
 
@@ -136,7 +136,7 @@ def make_rolling_figure(joined, window, lag):
     )
     return fig
 
-
+@st.cache_data(show_spinner=False, max_entries=12)
 def make_window_animation(joined, property_name, unit, window):
     """Animated scatter: each frame represents one consecutive weekly window."""
     valid_ends = joined.index[joined["rolling_r"].notna()].tolist()

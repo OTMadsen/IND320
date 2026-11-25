@@ -1,7 +1,8 @@
-import matplotlib.pyplot as plt
+
 import pandas as pd
-import seaborn as sns
+import plotly.graph_objects as go
 import streamlit as st
+
 from services.data import load_data, filter_nve_data
 from ui.filters import select_nve_month_range
 
@@ -51,39 +52,89 @@ def page_data_plot():
     )
 
     st.subheader(f"Plotting: {selected_col} ({start_m} – {end_m})")
-    fig, ax = plt.subplots(figsize=(10, 5))
-    sns.set_theme(style="whitegrid")
+    
+    fig = go.Figure()
 
     if selected_col == "All columns together":
+
         area_number = st.selectbox(
             "Select area number:",
             sorted(df_filtered["Area_Number"].unique()),
         )
-        area_df = df_filtered[df_filtered["Area_Number"] == area_number]
 
+        area_df = df_filtered[
+            df_filtered["Area_Number"] == area_number
+        ].sort_values("Date")
+
+        # Normalize each variable to a common scale [0, 1]
         for col in num_cols:
-            mn = area_df[col].min()
-            mx = area_df[col].max()
-            if mx > mn:
-                values = (area_df[col] - mn) / (mx - mn)
-            else:
-                values = pd.Series(0.0, index=area_df.index)
-            ax.plot(area_df["Date"], values, label=f"{col} (Normalized)")
 
-        ax.set_ylabel("Normalized Scale [0, 1]")
-    else:
-        for area_number, area_df in df_filtered.groupby("Area_Number"):
-            ax.plot(
-                area_df["Date"],
-                area_df[selected_col],
-                label=f"Area {area_number}",
+            values = pd.to_numeric(
+                area_df[col], errors="coerce"
             )
-        ax.set_ylabel(selected_col)
 
-    ax.set_xlabel("Date", fontweight="bold")
+            mn = values.min()
+            mx = values.max()
 
-    ax.legend(loc="upper right")
-    plt.xticks(rotation=30)
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close(fig)
+            if pd.notna(mn) and pd.notna(mx) and mx > mn:
+                normalized = (values - mn) / (mx - mn)
+            else:
+                normalized = pd.Series(
+                    0.0, index=area_df.index
+                )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=area_df["Date"],
+                    y=normalized,
+                    mode="lines",
+                    name=col,
+                )
+            )
+
+        y_title = "Normalized value (0–1)"
+
+    else:
+
+        # Plot the selected property for every area
+        for area_number, area_df in df_filtered.groupby(
+            "Area_Number"
+        ):
+
+            area_df = area_df.sort_values("Date")
+
+            fig.add_trace(
+                go.Scatter(
+                    x=area_df["Date"],
+                    y=area_df[selected_col],
+                    mode="lines",
+                    name=f"Area {area_number}",
+                )
+            )
+
+        y_title = selected_col
+
+    # Shared layout and interactive features
+    fig.update_layout(
+        title=f"{selected_col} — {start_m} to {end_m}",
+        xaxis_title="Date",
+        yaxis_title=y_title,
+        hovermode="x unified",
+        height=500,
+        legend=dict(
+            orientation="h",
+            y=-0.25,
+        ),
+        margin=dict(l=20, r=20, t=60, b=80),
+    )
+
+    fig.update_xaxes(
+        rangeslider_visible=False
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        theme="streamlit",
+    )
+

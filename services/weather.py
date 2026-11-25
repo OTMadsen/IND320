@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import streamlit as st
 
-
+@st.cache_data(show_spinner=False, max_entries=10)
 def weather_daily_from_hourly(hourly):
     data = hourly.copy()
     data["time"] = pd.to_datetime(data["time"], utc=True, errors="coerce")
@@ -48,7 +48,7 @@ def download_era5_by_coordinate(region, latitude, longitude,
     frame["longitude"] = longitude
     return frame
 
-
+@st.cache_data(show_spinner=False)
 def read_locations():
 
     project_root = Path(__file__).resolve().parent.parent

@@ -1,6 +1,8 @@
-import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
+import plotly.express as px
+
+
 from services.data import load_electricity_data
 
 
@@ -14,8 +16,40 @@ def page_electricity():
         return
 
     if df.empty:
+        st.info(
+    "Dataset coverage: This dashboard currently includes "
+    "three international electricity connections from NO2 "
+    "(Germany, Denmark and the Netherlands). "
+    "Other connections, including NO4–SE1, are not included "
+    "in the current MongoDB collection."
+)
         st.warning("No usable electricity records found.")
         return
+    
+    # Diagnostic: inspect available electricity connections
+    with st.expander("Available electricity connections"):
+        st.write("Total records:", len(df))
+        st.write("Available columns:", df.columns.tolist())
+
+        connections = sorted(
+            df["connection"].dropna().unique().tolist()
+        )
+
+        st.write("Number of connections:", len(connections))
+        st.write("Connection names:", connections)
+
+
+        connection_summary = (
+            df.groupby("connection")
+            .agg(
+                Observations=("value", "size"),
+                First_Date=("timestamp", "min"),
+                Last_Date=("timestamp", "max")
+            )
+
+            .reset_index()
+            .sort_values("connection")
+        )
 
     left, right = st.columns(2)
 
@@ -42,21 +76,50 @@ def page_electricity():
         if totals.empty:
             st.info("No positive flow values available.")
         else:
-            fig, ax = plt.subplots()
-            ax.pie(
-                totals,
-                labels=totals.index,
-                autopct="%1.1f%%",
-                startangle=90,
-            )
-            ax.set_title(f"{connection} - {year}")
-            st.pyplot(fig)
-            plt.close(fig)
-            st.caption(
-                "Share of summed recorded values by direction. "
-                "Energy totals require confirming the sampling interval and units."
+
+            totals_df = totals.rename("total").reset_index()
+
+            fig = px.pie(
+                totals_df,
+                names="direction",
+                values="total",
+                color="direction",
+                hole=0.38,
+                color_discrete_sequence=[
+                    "#2B9978",
+                    "#F0A32F",
+                    "#3978BE"
+                ],
+                title=f"Electricity flow direction - {connection} ({year})",
             )
 
+            fig.update_traces(
+                textposition="inside",
+                textinfo="percent+label",
+                hovertemplate=(
+                    "<b>%{label}</b><br>"
+                    "Share:%{percent}<br>"
+                    "Summed recorded value: %{value:,.2f}"
+                    "<extra></extra>"
+                ),
+            )
+
+            fig.update_layout(
+                height=400,
+                margin=dict(l=10, r=10, t=65, b=10),
+                legend_title_text="Direction",
+                legend=dict(
+                    orientation="h",
+                    y=-0.1,
+                ),
+            )
+
+            st.caption(
+                "Shared of summed recorded values by direction."
+                "Energy totals required confirming the sampling"
+                "interval and units"
+            )
+             
     with right:
         st.subheader("Electricity flow over time")
 

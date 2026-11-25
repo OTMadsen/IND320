@@ -19,13 +19,15 @@ import streamlit as st
 
 from services.weather import read_locations, download_era5_by_coordinate
 
+#All the paths for the datasets we wish to use, all in the different assignments folders
 ROOT = Path(__file__).resolve().parent.parent
 GEOJSON_PATH = ROOT / "assignments" / "assignment4" / "electricity_areas.geojson"
+RENDER_GEOJSON_PATH = ROOT / "assignments" /"assignment4" /"electricity_areas_render.geojson" #Due to some plotting issues I asked AI to error-search the original file, and rendered a new one
 RESERVOIR_PATH = ROOT / "assignments" / "assignment1" / "reservoirs.csv"
 WEATHER_2024_PATH = ROOT / "assignments" / "assignment4" / "NO3_ERA5_for_2024.csv"
 WEEKLY_AREAS_PATH = ROOT / "assignments" / "assignment4" / "area_weather_weekly_2024.csv"
 
-# Display label -> ERA5 hourly CSV field, weekly aggregation, unit
+# Label display
 WEATHER_FIELDS = {
     "Temperature": ("temperature_2m", "mean", "°C"),
     "Precipitation": ("precipitation", "sum", "mm/week"),
@@ -43,16 +45,38 @@ def normalise_region(value):
 
 @st.cache_data(show_spinner=False)
 def load_electricity_areas():
+    """Keep the original, verified GeoJSON for the true regional outlines."""
     if not GEOJSON_PATH.is_file():
         raise FileNotFoundError(f"Missing electricity-area GeoJSON: {GEOJSON_PATH}")
+
     areas = gpd.read_file(GEOJSON_PATH)
     if areas.crs is None:
         raise ValueError("GeoJSON is missing its coordinate reference system.")
     if "budomr" not in areas.columns:
         raise ValueError("GeoJSON must contain a 'budomr' column.")
+    if len(areas) != 5:
+        raise ValueError("Expected five electricity-area polygons.")
+
+    # Do NOT simplify with a 750-degree tolerance in EPSG:4326.
+    # Filled map rendering is handled by the separately triangulated file.
     return json.loads(areas.to_crs(epsg=4326).to_json())
 
 
+@st.cache_data(show_spinner=False)
+def load_render_triangles():
+    "This is used for map colouring"
+
+    if not RENDER_GEOJSON_PATH.is_file():
+        raise FileNotFoundError(
+            f"Missing rendering GeoJSON: {RENDER_GEOJSON_PATH}"
+        )
+
+    with RENDER_GEOJSON_PATH.open(
+        "r", encoding="utf-8"
+    ) as file:
+        return json.load(file)
+
+    
 @st.cache_data(show_spinner=False)
 def load_map_reservoirs():
     if not RESERVOIR_PATH.is_file():
@@ -141,17 +165,22 @@ def load_bundled_weather():
     return pd.DataFrame(columns=["week", "region"])
 
 
-def prepare_all_areas_from_era5():
-    """Explicitly download only the four missing sample points for year 2024."""
+def prepare_all_areas_from_era5(progress=None):
     points = read_locations()
     groups = []
-    # Preserve NO3 from the CSV if available (same reference used elsewhere).
+    
     if WEATHER_2024_PATH.is_file():
         groups.append(hourly_to_weekly(pd.read_csv(WEATHER_2024_PATH), "NO3"))
     for num in (1, 2, 3, 4, 5):
         region = f"NO{num}"
         if region == "NO3" and WEATHER_2024_PATH.is_file():
+            if progress is None:
+                progress.progess(
+                    num / 5,
+                    text = f"Prepared {num} of 5 electricity areas"
+                )
             continue
+        
         subset = points.loc[points["region"].map(normalise_region) == region]
         if subset.empty:
             raise ValueError(f"No sampled location is available for {region}.")
@@ -162,6 +191,11 @@ def prepare_all_areas_from_era5():
             "2024-01-01", "2024-12-31",
         )
         groups.append(hourly_to_weekly(hourly, region))
+        if progress is not None:
+            progress.progress(
+                num / 5, 
+                text=f"Prepared {num} of 5 electricity areas"
+            )
     return pd.concat(groups, ignore_index=True).sort_values(["week", "region"])
 
 
@@ -212,14 +246,66 @@ def page_area_map():
         st.session_state.selected_area_id = None
         st.session_state.selected_area_type = selected_type
     area_measurements = measurements.loc[measurements["omrType"] == selected_type].copy()
-    if selected_type != "EL":
-        st.subheader(f"{classification} — {selected_date}")
-        columns = [c for c in ("omrnr", "fyllingsgrad", "fylling_TWh")
-                   if c in area_measurements.columns]
-        st.dataframe(area_measurements[columns], hide_index=True)
-        st.caption("These classifications still need their own geographical boundaries. "
-                   "The last selected electricity area is preserved for analysis pages.")
+    
+    if selected_type == "VASS":
+
+        st.subheader(f"{classification} - {selected_date}")
+
+        columns = [
+            c for c in ("omrnr", "fyllingsgrad", "fylling_TWh")
+            if c in area_measurements.columns
+        ]
+
+        st.dataframe(
+            area_measurements[columns],
+            hide_index=True
+        )
+
+        st.info(
+            "VASS regions 1–3 require their own verified boundaries. "
+            "The electricity-area polygons would not be appropriate here."
+        )
+
         return
+
+    
+    # Norway total: show the nationwide reservoir measurement
+    if selected_type == "NO":
+
+        st.subheader(f"Norway total — {selected_date}")
+
+        national = area_measurements.loc[
+            area_measurements["omrnr"] == 0
+        ]
+
+        if national.empty:
+            st.warning("No nationwide reservoir data available.")
+            return
+
+        filling = float(national["fyllingsgrad"].mean())
+
+        st.metric(
+            "Norway-wide reservoir filling",
+            f"{filling * 100:.1f}%"
+        )
+
+        columns = [
+            c for c in ("omrnr", "fyllingsgrad", "fylling_TWh")
+            if c in national.columns
+        ]
+
+        st.dataframe(
+            national[columns],
+            hide_index=True
+        )
+
+        st.info(
+            "This is the nationwide NVE reservoir aggregate. "
+            "The nationwide map is omitted until suitable boundaries are available."
+        )
+
+        return
+
 
     metric = st.radio(
         "Colour electricity areas by",
@@ -242,13 +328,32 @@ def page_area_map():
             return
 
         if st.button("Prepare 2024 ERA5 data for all five electricity areas"):
+
+            progress = st.progress(
+                0,
+                text="Preparing ERA5 weather observations..."
+            )
+
             try:
-                with st.spinner("Downloading sampled ERA5 data for missing areas..."):
-                    weather = prepare_all_areas_from_era5()
+                with st.spinner(
+                    "Downloading and processing weather data",
+                    show_time=True
+                ):
+                    weather = prepare_all_areas_from_era5(
+                        progress=progress
+                    )
+
                     st.session_state["area_weather_weekly"] = weather
-                st.success("ERA5 weather prepared for all five electricity areas.")
+
+                st.success(
+                    "ERA 5 weather prepared for all five electricity areas!"
+                )
+
             except Exception as exc:
                 st.error(f"Could not prepare ERA5 data: {exc}")
+
+            finally:
+                progress.empty()
 
         available = [
             label for label, (column, _method, _unit) in WEATHER_FIELDS.items()
@@ -303,7 +408,12 @@ def page_area_map():
                      "so the map loads automatically for new visitors.",
             )
 
-    geojson = copy.deepcopy(load_electricity_areas())
+    try:
+        geojson = copy.deepcopy(load_render_triangles())
+    except FileNotFoundError as exc:
+        st.error(str(exc))
+        st.info("Add electricity_areas_render.geojson to assignments/assignment4/.")
+        return
     for feature in geojson["features"]:
         props = feature["properties"]
         region = normalise_region(props.get("budomr", ""))
@@ -320,59 +430,118 @@ def page_area_map():
             props["metric_label"] = (f"{value:.1f} {unit}" if value is not None else "No data")
             props["metric_title"] = weather_label
 
+
+  
     base_layer = pdk.Layer(
-        "GeoJsonLayer", id="electricity_areas", data=geojson,
-        pickable=True, stroked=True, filled=True, extruded=False, opacity=1,
-        get_fill_color="properties.fill_color",
-        get_line_color=[30, 60, 100, 200], get_line_width=1,
-        line_width_units="pixels", line_width_min_pixels=1,
+            "GeoJsonLayer",
+                id="electricity_areas",
+                data=geojson,
+                pickable=True,
+
+    # Prevent individual triangles from being highlighted
+                auto_highlight=False,
+                highlight_color=[0, 0, 0, 0],
+
+                stroked=False,
+                filled=True,
+                extruded=False,
+                opacity=1,
+                get_fill_color="properties.fill_color",
     )
-    layers = [base_layer]
+
+    # Draw the real region boundaries over the triangles.
+    outline_layer = pdk.Layer(
+        "GeoJsonLayer",
+        id="electricity_outlines",
+        data=load_electricity_areas(),
+        pickable=False,
+        stroked=True,
+        filled=False,
+        extruded=False,
+        get_line_color=[30, 60, 100, 200],
+        get_line_width=1,
+        line_width_units="pixels",
+        line_width_min_pixels=1,
+    )
+    layers = [base_layer, outline_layer]
+
+    # Highlight only the selected region's actual outline, not every triangle.
     selected_area = st.session_state.selected_area_id
     if selected_area is not None:
-        selected_geo = [f for f in geojson["features"]
-                        if normalise_region(f["properties"].get("budomr", ""))
-                        == normalise_region(selected_area)]
+        selected_geo = [
+            feature for feature in load_electricity_areas()["features"]
+            if normalise_region(feature["properties"].get("budomr", ""))
+            == normalise_region(selected_area)
+        ]
         if selected_geo:
-            layers.append(pdk.Layer(
-                "GeoJsonLayer", id="selected_area_highlight",
+            highlight_layer = pdk.Layer(
+                "GeoJsonLayer",
+                id="selected_area_highlight",
                 data={"type": "FeatureCollection", "features": selected_geo},
-                pickable=False, stroked=True, filled=False, extruded=False,
-                get_line_color=[255, 165, 0, 150], get_line_width=1,
-                line_width_units="pixels", line_width_min_pixels=1,
-            ))
+                pickable=False,
+                stroked=True,
+                filled=False,
+                extruded=False,
+                get_line_color=[255, 165, 0, 150],
+                get_line_width=1,
+                line_width_units="pixels",
+                line_width_min_pixels=1,
+            )
+            layers.append(highlight_layer)
 
     deck = pdk.Deck(
         layers=layers,
-        initial_view_state=pdk.ViewState(latitude=64.5, longitude=12.5, zoom=3.5, pitch=0),
+        initial_view_state=pdk.ViewState(
+            latitude=64.5, longitude=12.5, zoom=3.5, pitch=0
+        ),
         map_style=None,
         tooltip={
-            "html": "<b>Electricity area:</b> {budomr}<br/><b>{metric_title}:</b> {metric_label}",
+            "html": "<b>Electricity area:</b> {budomr}"
+                    "<br/><b>{metric_title}:</b> {metric_label}",
             "style": {"color": "white"},
         },
     )
+
     event = st.pydeck_chart(
-        deck, height=600, key="electricity_area_map",
-        on_select="rerun", selection_mode="single-object",
+        deck,
+        height=600,
+        key="electricity_area_map",
+        on_select="rerun",
+        selection_mode="single-object",
     )
+
+    # Selection indices now refer to the triangle features, not the 5 outlines.
     indices = event.selection.indices.get("electricity_areas", [])
     if indices:
-        i = indices[0]
-        if 0 <= i < len(geojson["features"]):
-            clicked = str(geojson["features"][i]["properties"]["budomr"]).strip()
-            code = normalise_region(clicked)
-            if code != st.session_state.get("selected_electricity_area") or clicked != st.session_state.selected_area_id:
-                st.session_state.selected_area_id = clicked
+        feature_index = indices[0]
+        if 0 <= feature_index < len(geojson["features"]):
+            clicked_area = str(
+                geojson["features"][feature_index]["properties"]["budomr"]
+            ).strip()
+            code = normalise_region(clicked_area)
+            if (
+                code != st.session_state.get("selected_electricity_area")
+                or clicked_area != st.session_state.selected_area_id
+            ):
+                st.session_state.selected_area_id = clicked_area
                 st.session_state.selected_area_type = "EL"
-                # This is the key consumed by all the other analysis pages.
+                # Shared state key read by other Streamlit analysis pages.
+                # The sidebar widget in app.py must use its separate key.
                 st.session_state["selected_electricity_area"] = code
                 st.rerun()
 
-    st.caption("Shared electricity area for other analysis pages: "
-               f"**{st.session_state['selected_electricity_area']}**")
+    st.caption(
+        "Shared electricity area for other analysis pages: "
+        f"**{st.session_state['selected_electricity_area']}**"
+    )
     if st.session_state.selected_area_id is not None:
-        st.success(f"Selected electricity area: {st.session_state.selected_area_id}")
+        st.success(
+            f"Selected electricity area: {st.session_state.selected_area_id}"
+        )
     else:
         st.info("Click an electricity area to select it for the other pages.")
+
     if metric == "Reservoir filling":
-        st.caption("Orange = lower reservoir filling · teal = higher filling · grey = missing data")
+        st.caption(
+            "Orange = lower reservoir filling · teal = higher filling · grey = missing data"
+        )
