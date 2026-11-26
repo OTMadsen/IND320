@@ -8,6 +8,16 @@ from services.data import load_electricity_data
 
 def page_electricity():
     st.title("Electricity Flow Dashboard")
+    st.markdown(
+        """
+        Investigate recorded international electricity flows between Norway and neighbouring electricity markets. 
+
+        Select a connection and year to compare electricity flow directions and observe how recorded values
+        develop over time
+
+        The available dataset currently covers three international connections from Norways NO2 region.
+        """
+    )
 
     try:
         df = load_electricity_data()

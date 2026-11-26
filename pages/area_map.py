@@ -7,6 +7,7 @@ The Open-Meteo ERA5 data request is user-triggered, then can be bundled as a
 CSV for immediate loading on future visits.
 """
 
+
 import copy
 import json
 import re
@@ -201,6 +202,19 @@ def prepare_all_areas_from_era5(progress=None):
 
 def page_area_map():
     st.title("Interactive Electricity Area Map")
+    st.markdown(
+        """
+        About this map:
+
+        Explore Norway's five electricity price areas (NO1-NO5).
+
+        The regions can be coloured according to weekly reservoir filling levels
+        or selected region with other analysis pages.
+
+        **Note**: Wather values represent sampled locations within each region, not regional averages. 
+
+        """
+    )
     if "selected_area_id" not in st.session_state:
         st.session_state.selected_area_id = None
     if "selected_area_type" not in st.session_state:

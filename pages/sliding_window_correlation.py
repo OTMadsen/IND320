@@ -230,6 +230,22 @@ def load_default_weather_csv():
 def page_sliding_window_correlation():
     region = get_selected_electricity_area()
     st.title("Sliding Window Correlation")
+    st.markdown(
+        """
+        About this analysis:
+
+        Explore the relationship between weather conditions and reservoir filling levels over time. 
+
+        THis analysis calculates **rolling Pearson correlations**
+        using weekly reservoir measurements and ERA5 weather data. 
+
+        Adjust the window size, time lag, and weather property to investigate how relationships
+        change over different periods. 
+
+        **Note:** Correlation describes statistical relationships, but does not establish causation. 
+        
+        """
+    )
     st.caption(f"Electricity area: {region} · Weekly NVE reservoir data and ERA5 weather")
     st.info(
         "Weather is measured at one sampled location within the electricity area, "

@@ -7,6 +7,17 @@ from ui.filters import select_nve_month_range
 def page_data_table():
     
     st.title("Page 2: Data Overview & First Month Sparklines")
+    st.markdown(
+        """
+        About this page:
+
+        Explore historical Norwegian reservoir measurements from **NVE Magasinstatistikk**.
+
+        Use available filters to select time periods and geographical areas. The table allows you to inspect 
+        reservoir filling levels, stored energy and other available measurements. 
+
+        """
+    )
     df = load_data()
 
     area_type = st.radio(

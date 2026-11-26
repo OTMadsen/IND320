@@ -9,7 +9,21 @@ from ui.filters import select_nve_month_range
 
 def page_data_plot():
     st.title("Page 3: Interactive Data Plotter")
-    
+    st.markdown(
+        """
+        
+        About this analysis:
+
+        This page visualizes how Norwegian reservoir measurements change over time. 
+
+        Select a geographical area classification, time interval,
+        and measurement to compare historical developments.
+
+        It is also possible to display multiple variables together using normalization,
+        allowing measurements with different scales to be compared more easily. 
+
+        """
+    )
     df = load_data()
     area_type = st.radio(
         "Select area type:",

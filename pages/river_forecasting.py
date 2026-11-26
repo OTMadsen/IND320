@@ -263,6 +263,25 @@ def _animated_figure(history, forecast):
 
 def page_river_forecasting():
     st.title("River SNARIMAX Forecasting")
+    st.markdown(
+
+        """
+        About this analysis:
+
+        Forecast future reservoir filling levels using 
+        **River's SNARIMAX time-series mdodel**
+
+        The model learns from historical weekly reservoir measurements
+        and predicts filling levels over a selected number of future weeks.
+
+        Adjust the training period, forecast horizon, and model parameters to explore different predictions.
+
+        Historical backtesting allows you to compare the model against a simple
+        persistence baseline. 
+        
+        **Note** Forecasts are estimates and are of course subject to uncertainty. 
+        """
+    )
     region = get_selected_electricity_area()
     st.caption(f"Electricity area: {region} · NVE reservoir filling · weekly (W-SUN)")
     st.write(

@@ -8,6 +8,21 @@ from analysis.anomalies import plot_precipitation_spc, plot_temperature_lof
 def page_weather_anomalies():
     region = get_selected_electricity_area()
     st.title("Weather Anomalies")
+    st.markdown(
+        """
+        About this analysis:
+
+        This page identifies observations based on two statistical approaches,
+        and their goals is to identify *unusual* weather observations.
+
+        -"DCT" and "SPC" - These detects unusual precipitation values relative to a smoothed baseline and statistical control limits.
+
+        - "LOF", or "Local Factor Outlier" identifies unusual temperature patterns using neighbouring observations.
+
+        You proceed by selecting an electricity area, load the ERA5 data and adjust parameters to investigate potential anomalies.
+
+        """
+    )
     st.caption(f"Electricity area: {region} · Open-Meteo ERA5 · UTC")
     st.info(
         "Each download uses one sampled location within the selected area. "
