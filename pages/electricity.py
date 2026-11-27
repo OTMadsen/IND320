@@ -79,9 +79,28 @@ def page_electricity():
             key="electricity_year",
         )
 
-        year_df = connection_df[connection_df["year"] == year]
+        
+        year_df = connection_df[
+            connection_df["year"] == year
+        ]
+
+        # Calculate directional totals
         totals = year_df.groupby("direction")["value"].sum()
+
+        # Check the values used by the donut chart
+        with st.expander("Donut chart data diagnostics"):
+            st.write("Selected connection:", connection)
+            st.write("Selected year:", year)
+            st.write("Number of records:", len(year_df))
+
+            st.dataframe(
+                totals.rename("Summed value").reset_index(),
+                hide_index=True,
+            )
+
+        # A pie chart requires positive values
         totals = totals[totals > 0]
+
 
         if totals.empty:
             st.info("No positive flow values available.")
@@ -122,6 +141,12 @@ def page_electricity():
                     orientation="h",
                     y=-0.1,
                 ),
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                theme="streamlit",
             )
 
             st.caption(
