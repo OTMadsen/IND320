@@ -4,8 +4,6 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from services.data import load_data, filter_nve_data
-from ui.filters import select_nve_month_range
-
 
 def page_data_plot():
     st.title("Page 3: Interactive Data Plotter")
@@ -50,11 +48,32 @@ def page_data_plot():
         "Select Column to Plot:", options=options, index=1
     )
 
-    selected_range = select_nve_month_range(df, "plot")
-    if selected_range is None:
+
+    # Give the reservoir plot its own historical date range
+    # instead of sharing the Data Table's month selection.
+
+    available_months = sorted(
+        df_no["YearMonth"].dropna().unique().tolist()
+    )
+
+    if not available_months:
+        st.warning("No historical reservoir data is available.")
         return
-    start_m, end_m = selected_range
-    df_filtered = filter_nve_data(df_no, start_m, end_m)
+
+    start_m, end_m = st.select_slider(
+        "Select historical period",
+        options=available_months,
+        value=(available_months[0], available_months[-1]),
+        key="reservoir_plot_history_range",
+    )
+
+    # Filter the dataset using the selected interval
+    df_filtered = filter_nve_data(
+        df_no, start_m, end_m
+    )
+
+
+   
     if df_filtered.empty:
         st.info("No reservoir data for this selection.")
         return
